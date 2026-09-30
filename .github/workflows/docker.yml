@@ -19,6 +19,9 @@ jobs:
   pull-and-release:
     runs-on: ubuntu-latest
     steps:
+      - name: 检出仓库代码（获取 Git 环境）
+        uses: actions/checkout@v4
+
       - name: 释放 Runner 磁盘空间（针对大型镜像）
         run: |
           sudo rm -rf /usr/share/dotnet
@@ -33,7 +36,6 @@ jobs:
 
       - name: 打包导出为 tar 镜像文件
         run: |
-          # 将镜像名转为安全的文件名（将 / 和 : 转换为 _）
           FILENAME=$(echo "${{ inputs.image_name }}" | tr '/:' '__').tar
           echo "TARGET_FILENAME=$FILENAME" >> $GITHUB_ENV
           echo "正在导出打包: $FILENAME"
@@ -46,5 +48,7 @@ jobs:
         run: |
           TAG="v-$(date +'%Y%m%d%H%M%S')"
           gh release create "$TAG" "$TARGET_FILENAME" \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.ref_name }}" \
             --title "${{ inputs.image_name }}" \
             --notes "架构平台: ${{ inputs.platform }}（适用于群晖 DS220+ 等 x86_64 平台）"
