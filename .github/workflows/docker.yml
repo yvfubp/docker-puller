@@ -1,0 +1,50 @@
+name: Docker 镜像代下导出
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_name:
+        description: 'Docker 镜像完整名称（带标签）'
+        required: true
+        default: 'jellyfin/jellyfin:latest'
+      platform:
+        description: '硬件架构（DS220+ 保持默认 linux/amd64 即可）'
+        required: true
+        default: 'linux/amd64'
+
+permissions:
+  contents: write
+
+jobs:
+  pull-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 释放 Runner 磁盘空间（针对大型镜像）
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+
+      - name: 拉取 Docker 镜像
+        run: |
+          echo "正在拉取镜像: ${{ inputs.image_name }} (架构: ${{ inputs.platform }})"
+          docker pull --platform ${{ inputs.platform }} ${{ inputs.image_name }}
+
+      - name: 打包导出为 tar 镜像文件
+        run: |
+          # 将镜像名转为安全的文件名（将 / 和 : 转换为 _）
+          FILENAME=$(echo "${{ inputs.image_name }}" | tr '/:' '__').tar
+          echo "TARGET_FILENAME=$FILENAME" >> $GITHUB_ENV
+          echo "正在导出打包: $FILENAME"
+          docker save ${{ inputs.image_name }} -o "$FILENAME"
+          ls -lh "$FILENAME"
+
+      - name: 创建 Release 并上传镜像
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v-$(date +'%Y%m%d%H%M%S')"
+          gh release create "$TAG" "$TARGET_FILENAME" \
+            --title "${{ inputs.image_name }}" \
+            --notes "架构平台: ${{ inputs.platform }}（适用于群晖 DS220+ 等 x86_64 平台）"
